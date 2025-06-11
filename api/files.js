@@ -1,8 +1,9 @@
 // api/files.js
+
 import { Readable } from 'stream';
 import formidable from 'formidable';
+import fs from 'fs'; // Use ESM import for fs
 
-// 关闭 Vercel 默认的 bodyParser，以便我们可以处理流式上传
 export const config = {
   api: {
     bodyParser: false,
@@ -10,62 +11,38 @@ export const config = {
 };
 
 // --- Helper Functions ---
-
-// 使用 PROPFIND 方法列出 WebDAV 目录中的文件
 async function listFiles(authConfig) {
     const { targetBaseUrl, targetAuth } = authConfig;
     const uploadsUrl = `${targetBaseUrl}uploads/`;
-
     const response = await fetch(uploadsUrl, {
         method: 'PROPFIND',
-        headers: {
-            'Authorization': targetAuth,
-            'Depth': '1', // 只查找当前目录
-            'User-Agent': 'Vercel-Dashboard-App/Final'
-        }
+        headers: { 'Authorization': targetAuth, 'Depth': '1', 'User-Agent': 'Vercel-Dashboard-App/Final' }
     });
-
     if (!response.ok) {
-        // 如果目录不存在 (404)，这是正常情况，直接返回空列表
-        if (response.status === 404) {
-            console.log("`uploads` 目录不存在，将返回空列表。");
-            return [];
-        }
-        throw new Error(`列出文件失败: ${response.statusText}`);
+        if (response.status === 404) return [];
+        throw new Error(`Failed to list files: ${response.statusText}`);
     }
-
     const text = await response.text();
-    // 使用正则表达式从 XML 响应中解析出文件链接
     const files = Array.from(text.matchAll(/<d:href>(.*?)<\/d:href>/g))
         .map(match => decodeURIComponent(match[1]))
-        // 过滤掉目录本身
-        .filter(href => href.startsWith(uploadsUrl.substring(uploadsUrl.indexOf('/dav/'))) && href !== uploadsUrl.substring(uploadsUrl.indexOf('/dav/')))
+        .filter(href => href.includes('/uploads/') && !href.endsWith('/uploads/'))
         .map(href => {
             const name = href.split('/').pop();
             return { name, url: `${targetBaseUrl}uploads/${encodeURIComponent(name)}` };
         });
-
     return files;
 }
 
-// 删除指定文件
 async function deleteFile(authConfig, filename) {
     const { targetBaseUrl, targetAuth } = authConfig;
     const fileUrl = `${targetBaseUrl}uploads/${encodeURIComponent(filename)}`;
-
-    const response = await fetch(fileUrl, {
-        method: 'DELETE',
-        headers: { 'Authorization': targetAuth }
-    });
-    
-    // 204 No Content 是成功的响应
+    const response = await fetch(fileUrl, { method: 'DELETE', headers: { 'Authorization': targetAuth } });
     if (!response.ok && response.status !== 204) {
-        throw new Error(`删除文件失败: ${response.statusText}`);
+        throw new Error(`Failed to delete file: ${response.statusText}`);
     }
 }
 
 // --- Main Handler ---
-
 export default async function handler(req, res) {
     // --- Authentication ---
     const appPassword = process.env.APP_PASSWORD;
@@ -85,53 +62,35 @@ export default async function handler(req, res) {
         if (req.method === 'GET') {
             const files = await listFiles(authConfig);
             res.status(200).json(files);
-        } 
-        else if (req.method === 'POST') {
-            // 使用 formidable 解析 multipart/form-data
-            const form = formidable({ 
-                maxFileSize: 100 * 1024 * 1024, // 100MB max
-                keepExtensions: true,
-            });
-
+        } else if (req.method === 'POST') {
+            const form = formidable({ maxFileSize: 100 * 1024 * 1024, keepExtensions: true });
             form.parse(req, async (err, fields, files) => {
-                if (err) {
-                    console.error("解析表单时出错:", err);
-                    return res.status(500).json({ error: 'Failed to process upload' });
-                }
-
-                const file = files.upload; // 'upload' 是前端 input 的 name
+                if (err) return res.status(500).json({ error: 'Failed to process upload' });
+                const file = files.upload[0]; // formidable v3 returns arrays
                 const originalFilename = file.originalFilename;
-                const fileStream = Readable.from(require('fs').readFileSync(file.filepath));
-
+                const fileStream = fs.createReadStream(file.filepath); // Use fs.createReadStream
                 const response = await fetch(`${targetBaseUrl}uploads/${encodeURIComponent(originalFilename)}`, {
                     method: 'PUT',
-                    headers: { 
-                        'Authorization': targetAuth,
-                        'Content-Type': file.mimetype
-                    },
+                    headers: { 'Authorization': targetAuth, 'Content-Type': file.mimetype },
                     body: fileStream,
                 });
-                
-                if (!response.ok && response.status !== 201 && response.status !== 204) {
-                     const errorText = await response.text();
-                     throw new Error(`上传失败: ${response.statusText}, ${errorText}`);
+                if (![200, 201, 204].includes(response.status)) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload failed: ${response.statusText}, ${errorText}`);
                 }
-                
-                res.status(200).json({ message: '文件上传成功' });
+                res.status(200).json({ message: 'File uploaded successfully' });
             });
-        } 
-        else if (req.method === 'DELETE') {
+        } else if (req.method === 'DELETE') {
             const filename = req.query.filename;
-            if (!filename) return res.status(400).json({ error: '缺少 filename 查询参数' });
+            if (!filename) return res.status(400).json({ error: 'Filename query parameter is required' });
             await deleteFile(authConfig, filename);
-            res.status(200).json({ message: '文件删除成功' });
-        } 
-        else {
+            res.status(200).json({ message: 'File deleted successfully' });
+        } else {
             res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
-            res.status(405).json({ error: '不支持的方法' });
+            res.status(405).json({ error: 'Method not allowed' });
         }
     } catch (e) {
-        console.error("文件 API 出错:", e);
+        console.error("File API Error:", e);
         res.status(500).json({ error: e.message });
     }
 }
