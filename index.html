@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>正在加载...</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f6f8; --sidebar-bg: #ffffff; --block-bg: #ffffff; --text-color: #1a1a1a;
+            --subtext-color: #666; --border-color: #e5e5e5; --shadow: 0 1px 3px rgba(0,0,0,0.05);
+            --primary-color: #007aff; --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            --danger-color: #ff3b30; --sidebar-width: 240px;
+        }
+        body.theme-dark {
+            --bg-color: #121212; --sidebar-bg: #1e1e1e; --block-bg: #1e1e1e; --text-color: #e0e0e0;
+            --subtext-color: #a0a0a0; --border-color: #333;
+        }
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: var(--font-main); background-color: var(--bg-color); color: var(--text-color); margin: 0; overflow: hidden; }
+        #app-container { display: flex; height: 100vh; flex-direction: column; }
+        main { flex-grow: 1; overflow-y: auto; }
+        .page { display: none; height: 100%; padding: 1.5rem; }
+        .page.active { display: block; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .page-header h1 { font-size: 1.8rem; margin: 0; }
+        .item-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));}
+        .list-item { background: var(--block-bg); border-radius: 8px; padding: 1rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s; }
+        .list-item:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+        .list-item .icon { width: 32px; height: 32px; flex-shrink: 0; object-fit: contain; }
+        .list-item-content { flex-grow: 1; min-width: 0; }
+        .list-item-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .list-item-subtext { font-size: 0.85rem; color: var(--subtext-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .list-item-actions { display: flex; gap: 0.5rem; }
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--subtext-color); padding: 4px; border-radius: 4px; }
+        .action-btn:hover { background-color: var(--bg-color); color: var(--text-color); }
+        .add-button, .primary-btn { background: var(--primary-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
+        .add-button:hover, .primary-btn:hover { filter: brightness(1.1); }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; backdrop-filter: blur(4px); z-index: 1000; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--block-bg); width: 90%; max-width: 500px; padding: 1.5rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .form-group label { font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); font-size: 1rem; font-family: inherit; background-color: var(--bg-color); color: var(--text-color); }
+        #tab-bar { display: flex; background: var(--sidebar-bg); border-top: 1px solid var(--border-color); padding: 0.5rem; gap: 0.5rem; flex-shrink: 0; }
+        .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; background: none; border: none; padding: 0.25rem; border-radius: 8px; color: var(--subtext-color); font-size: 0.75rem; }
+        .tab-item.active { background: var(--primary-color); color: white; }
+        .tab-icon { font-size: 1.5rem; }
+        #sidebar { display: none; }
+        @media (min-width: 769px) {
+            #app-container { flex-direction: row; }
+            #tab-bar { display: none; }
+            #sidebar { display: flex !important; flex-direction: column; width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--border-color); padding: 1rem; flex-shrink: 0; }
+            #sidebar-header { font-size: 1.5rem; font-weight: 700; padding: 0.5rem 0.5rem 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
+            #sidebar-nav { list-style: none; padding: 0; margin: 0; flex-grow: 1; }
+            .nav-link { display: flex; align-items: center; padding: 0.75rem; border-radius: 8px; text-decoration: none; color: var(--subtext-color); font-weight: 500; gap: 0.75rem; }
+            .nav-link:hover { background: var(--bg-color); }
+            .nav-link.active { background: var(--primary-color); color: white; }
+            .page { padding: 2rem; }
+        }
+        #toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(20, 20, 20, 0.9); color: white; padding: 0.75rem 1.5rem; border-radius: 8px; z-index: 1001; opacity: 0; visibility: hidden; transition: all 0.3s; }
+        #toast.show { opacity: 1; visibility: visible; }
+        .sortable-ghost { opacity: 0.4; background: var(--primary-color) !important; color: white; }
+        .sortable-drag { opacity: 1 !important; }
+        #settings-page .form-group input[type="color"] { padding: 0.25rem; height: 48px; }
+        .settings-block-item { background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; align-items: center; gap: 1rem; cursor: grab; }
+        .settings-block-item:active { cursor: grabbing; }
+        .danger-btn { background-color: var(--danger-color); }
+    </style>
+</head>
+<body>
+    <div id="auth-modal" class="modal active">
+        <div class="modal-content">
+            <h3>需要验证</h3>
+            <form id="auth-form">
+                <div class="form-group">
+                    <input type="password" id="auth-password" placeholder="请输入密码" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="primary-btn" style="width: 100%;">确认</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-container" style="display: none;">
+        <aside id="sidebar"></aside>
+        <main id="main-content"></main>
+        <nav id="tab-bar"></nav>
+    </div>
+
+    <div id="toast"></div>
+
+    <div id="add-link-modal" class="modal">
+        <div class="modal-content">
+            <h3>添加新网站</h3>
+            <form id="add-link-form">
+                <div class="form-group">
+                    <label for="link-name">名称</label>
+                    <input type="text" id="link-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="link-url">URL</label>
+                    <input type="text" id="link-url" placeholder="example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="link-icon">图标 URL (可选)</label>
+                    <input type="url" id="link-icon" placeholder="https://.../icon.png">
+                </div>
+                <div class="form-group">
+                    <label for="link-description">描述 (可选)</label>
+                    <input type="text" id="link-description">
+                </div>
+                <div class="form-group" style="flex-direction: row; justify-content: flex-end; gap: 1rem;">
+                    <button type="button" class="action-btn" id="cancel-add-link">取消</button>
+                    <button type="submit" class="primary-btn">添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-clipboard-modal" class="modal">
+        <div class="modal-content">
+            <h3>添加新备忘</h3>
+            <form id="add-clipboard-form">
+                <div class="form-group">
+                    <label for="clip-title">标题</label>
+                    <input type="text" id="clip-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="clip-text">内容</label>
+                    <textarea id="clip-text" rows="4" required></textarea>
+                </div>
+                 <div class="form-group" style="flex-direction: row; justify-content: flex-end; gap: 1rem;">
+                    <button type="button" class="action-btn" id="cancel-add-clip">取消</button>
+                    <button type="submit" class="primary-btn">添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+        <script>
+    // --- App State ---
+    let appData = null;
+    let password = null;
+    let davLatency = null;
+    let activePageId = null;
+    let sortableInstance = null;
+    const cache = new Map();
+
+    // --- DOM Elements ---
+    const authModal = document.getElementById('auth-modal');
+    const authForm = document.getElementById('auth-form');
+    const appContainer = document.getElementById('app-container');
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const tabBar = document.getElementById('tab-bar');
+    const toast = document.getElementById('toast');
+
+    // --- API Communication Layer ---
+    const api = {
+        _request: async (endpoint, options = {}) => {
+            if (!password) {
+                requestAuth(() => api._request(endpoint, options));
+                return Promise.reject('等待验证');
+            }
+            const defaultOptions = { headers: { 'Authorization': 'Bearer ' + password } };
+            const mergedOptions = { ...defaultOptions, ...options, headers: { ...defaultOptions.headers, ...options.headers } };
+            const response = await fetch(endpoint, mergedOptions);
+            if ([401, 403].includes(response.status)) {
+                password = null;
+                requestAuth(() => api._request(endpoint, options));
+                throw new Error('密码错误或会话已失效');
+            }
+            return response;
+        },
+        getData: () => api._request('/api/get-data'),
+        saveData: (body) => api._request('/api/save-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+        getFiles: () => api._request('/api/files'),
+        deleteFile: (filename) => api._request(`/api/files?filename=${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+        uploadFile: (file) => {
+            const formData = new FormData();
+            formData.append('upload', file);
+            return api._request('/api/files', { method: 'POST', body: formData });
+        }
+    };
+
+    // --- Core Functions ---
+    async function initializeApp() {
+        try {
+            const response = await api.getData();
+            davLatency = response.headers.get('X-DAV-Latency');
+            appData = await response.json();
+            applySettings();
+            render();
+            const initialPageId = (appData.blocks && appData.blocks.length > 0) ? appData.blocks[0].id : 'settings-page';
+            navigateTo(initialPageId);
+        } catch (error) {
+            if (error.message !== '等待验证') showToast(`初始化失败: ${error.message}`, 'error');
+        }
+    }
+
+    // --- Rendering Engine ---
+    function applySettings() {
+        const { meta, settings } = appData;
+        document.title = meta.title || "Dashboard";
+        let favicon = document.querySelector("link[rel*='icon']");
+        if (!favicon) {
+            favicon = document.createElement('link');
+            favicon.rel = 'shortcut icon';
+            document.head.appendChild(favicon);
+        }
+        favicon.href = meta.favicon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>';
+        
+        document.body.classList.toggle('theme-dark', settings.theme === 'dark');
+        document.documentElement.style.setProperty('--primary-color', settings.accentColor);
+        if (window.innerWidth >= 769) {
+            document.documentElement.style.setProperty('--sidebar-width', settings.sidebarWidth || '240px');
+        }
+        document.body.style.backgroundImage = settings.backgroundImage ? `url('${settings.backgroundImage}')` : '';
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundAttachment = 'fixed';
+    }
+
+    function render() {
+        renderNavigation();
+        renderMainContent();
+    }
+
+    function renderNavigation() {
+        const createNavItems = (container, itemClass, contentClass, clickHandler) => {
+            container.innerHTML = '';
+            appData.blocks.forEach(block => {
+                const item = document.createElement('button');
+                item.className = itemClass;
+                item.dataset.id = block.id;
+                item.innerHTML = `<span class="${contentClass} icon">${block.icon || '📁'}</span><span class="${contentClass} text">${block.title}</span>`;
+                item.onclick = () => clickHandler(block.id);
+                container.appendChild(item);
+            });
+            const settingsItem = document.createElement('button');
+            settingsItem.className = itemClass;
+            settingsItem.dataset.id = 'settings-page';
+            settingsItem.innerHTML = `<span class="${contentClass} icon">⚙️</span><span class="${contentClass} text">设置</span>`;
+            settingsItem.onclick = () => clickHandler('settings-page');
+            container.appendChild(settingsItem);
+        };
+        
+        sidebar.innerHTML = `<h1 id="sidebar-header">${appData.meta.title}</h1><nav id="sidebar-nav"></nav>`;
+        const nav = document.getElementById('sidebar-nav');
+        createNavItems(nav, 'nav-link', 'nav-text', navigateTo);
+        createNavItems(tabBar, 'tab-item', 'tab-icon', navigateTo);
+    }
+    
+    function renderMainContent() {
+        mainContent.innerHTML = '';
+        appData.blocks.forEach(block => mainContent.appendChild(renderPage(block)));
+        mainContent.appendChild(renderSettingsPage());
+    }
+
+    function renderPage(block) {
+        const page = document.createElement('div');
+        page.id = block.id;
+        page.className = 'page';
+        page.innerHTML = `<div class="page-header"><h1>${block.title}</h1><button class="add-button" data-type="${block.type}">添加</button></div><div class="page-content"></div>`;
+        const content = page.querySelector('.page-content');
+
+        const renderer = {
+            'links': renderLinksPage,
+            'clipboard': renderClipboardPage,
+            'files': renderFilesPage,
+        }[block.type];
+
+        if (renderer) renderer(content, block);
+        else content.innerHTML = `<p>未知的区块类型: ${block.type}</p>`;
+        
+        return page;
+    }
+
+    // --- Block-specific Page Renderers ---
+    function renderLinksPage(container, block) {
+        const list = document.createElement('div');
+        list.className = 'item-list';
+        (block.data || []).forEach(item => {
+            const link = document.createElement('a');
+            link.href = item.url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'list-item';
+            link.innerHTML = `
+                <img class="icon" src="${item.icon || `https://www.google.com/s2/favicons?sz=64&domain_url=${item.url}`}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>'">
+                <div class="list-item-content">
+                    <div class="list-item-title">${item.name}</div>
+                    <div class="list-item-subtext">${item.description || item.url}</div>
+                </div>
+                <div class="list-item-actions">
+                    <button class="action-btn delete-btn" data-id="${item.id}" data-block-id="${block.id}">🗑️</button>
+                </div>`;
+            link.querySelector('.delete-btn').addEventListener('click', (e) => { e.preventDefault(); handleDeleteItem(e); });
+            list.appendChild(link);
+        });
+        container.innerHTML = '';
+        container.appendChild(list);
+    }
+
+    function renderClipboardPage(container, block) {
+        const list = document.createElement('div');
+        list.className = 'item-list';
+        (block.data || []).forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'list-item';
+            el.innerHTML = `
+                <div class="list-item-content">
+                    <div class="list-item-title">${item.title}</div>
+                    <div class="list-item-subtext" style="white-space: normal;">${item.text}</div>
+                </div>
+                <div class="list-item-actions">
+                    <button class="action-btn copy-btn" data-text="${item.text}">📋</button>
+                    <button class="action-btn delete-btn" data-id="${item.id}" data-block-id="${block.id}">🗑️</button>
+                </div>`;
+            el.querySelector('.delete-btn').onclick = handleDeleteItem;
+            el.querySelector('.copy-btn').onclick = (e) => {
+                navigator.clipboard.writeText(e.currentTarget.dataset.text);
+                showToast('已复制到剪贴板');
+            };
+            list.appendChild(el);
+        });
+        container.innerHTML = '';
+        container.appendChild(list);
+    }
+    
+    async function renderFilesPage(container, block) {
+        container.innerHTML = '<p>正在加载文件列表...</p>';
+        try {
+            const response = await api.getFiles();
+            const files = await response.json();
+            cache.set('files', files); // Cache the result
+            
+            const list = document.createElement('div');
+            list.className = 'item-list';
+            files.forEach(file => {
+                const el = document.createElement('div');
+                el.className = 'list-item';
+                el.innerHTML = `
+                    <div class="list-item-content">
+                        <div class="list-item-title">${file.name}</div>
+                    </div>
+                    <div class="list-item-actions">
+                        <a href="${file.url}?token=${password}" download="${file.name}" class="action-btn">📥</a>
+                        <button class="action-btn delete-file-btn" data-name="${file.name}">🗑️</button>
+                    </div>`;
+                list.appendChild(el);
+            });
+            container.innerHTML = '';
+            const uploader = document.createElement('input');
+            uploader.type = 'file';
+            uploader.style.marginBottom = '1rem';
+            uploader.onchange = handleFileUpload;
+            container.appendChild(uploader);
+            container.appendChild(list);
+        } catch (error) {
+            container.innerHTML = `<p style="color:var(--danger-color)">加载文件列表失败: ${error.message}</p>`;
+        }
+    }
+    
+    function renderSettingsPage() {
+        const page = document.createElement('div');
+        page.id = 'settings-page';
+        page.className = 'page';
+        page.innerHTML = `
+            <div class="page-header"><h1>设置</h1><button id="save-settings-btn" class="primary-btn">保存更改</button></div>
+            <div id="settings-content" class="item-list"></div>`;
+        const content = page.querySelector('#settings-content');
+
+        content.innerHTML = `
+            <div class="list-item">
+                <div class="form-group" style="width:100%">
+                    <label>网站信息</label>
+                    <input type="text" id="setting-meta-title" placeholder="网站标题" value="${appData.meta.title || ''}">
+                    <input type="url" id="setting-meta-favicon" placeholder="网站图标 URL" value="${appData.meta.favicon || ''}">
+                </div>
+            </div>
+            <div class="list-item">
+                <div class="form-group" style="width:100%">
+                    <label>外观</label>
+                    <select id="setting-theme">
+                        <option value="light">明亮</option><option value="dark">暗黑</option>
+                    </select>
+                    <input type="color" id="setting-accentColor" value="${appData.settings.accentColor || '#007aff'}">
+                    <input type="url" id="setting-bg-image" placeholder="背景图片 URL (留空为纯色)" value="${appData.settings.backgroundImage || ''}">
+                </div>
+            </div>
+            <div class="list-item">
+                <div class="form-group" style="width:100%">
+                    <label>功能区块 (拖拽排序)</label>
+                    <div id="blocks-editor"></div>
+                    <button id="add-block-btn" class="add-button" style="align-self: flex-start;">添加区块</button>
+                </div>
+            </div>
+            <div class="list-item">
+                 <div class="form-group" style="width:100%">
+                    <label>诊断信息</label>
+                    <p>与 WebDAV 服务器连接延迟: <strong>${davLatency || 'N/A'} ms</strong></p>
+                </div>
+            </div>
+        `;
+        
+        content.querySelector('#setting-theme').value = appData.settings.theme;
+        
+        const blocksEditor = content.querySelector('#blocks-editor');
+        appData.blocks.forEach(block => blocksEditor.appendChild(createBlockEditorItem(block)));
+        
+        sortableInstance = new Sortable(blocksEditor, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            dragClass: 'sortable-drag',
+        });
+        
+        return page;
+    }
+    
+    function createBlockEditorItem(block) {
+        const item = document.createElement('div');
+        item.className = 'settings-block-item';
+        item.dataset.id = block.id;
+        item.innerHTML = `
+            <div class="list-item-content">
+                <input type="text" class="block-title-input" value="${block.title}">
+                <input type="text" class="block-icon-input" value="${block.icon}" placeholder="Icon">
+            </div>
+            <div class="list-item-actions">
+                <button class="action-btn delete-block-btn" data-id="${block.id}">🗑️</button>
+            </div>
+        `;
+        return item;
+    }
+
+    // --- Event Handlers & Logic ---
+    function navigateTo(pageId) {
+        activePageId = pageId;
+        document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === pageId));
+        document.querySelectorAll('#sidebar .nav-link, #tab-bar .tab-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.id === pageId);
+        });
+        if (pageId.startsWith('block-files')) {
+           const page = document.getElementById(pageId);
+           if(page && !cache.has('files')) {
+                const content = page.querySelector('.page-content');
+                renderFilesPage(content, appData.blocks.find(b => b.id === pageId));
+           }
+        }
+    }
+
+    function showModal(id) { document.getElementById(id).classList.add('active'); }
+    function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+    
+    function smartUrl(url) {
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return `https://${url}`;
+        }
+        return url;
+    }
+
+    // --- Main Event Listener Delegation ---
+    document.body.addEventListener('click', async (e) => {
+        const target = e.target;
+        // Add buttons in page headers
+        if (target.matches('.add-button')) {
+            const type = target.dataset.type;
+            if (type === 'links') showModal('add-link-modal');
+            if (type === 'clipboard') showModal('add-clipboard-modal');
+        }
+        // Delete item buttons
+        if (target.matches('.delete-btn')) {
+            handleDeleteItem(e);
+        }
+        // Delete file buttons
+        if (target.matches('.delete-file-btn')) {
+            handleDeleteFile(e);
+        }
+        // Save settings button
+        if (target.id === 'save-settings-btn') {
+            handleSaveSettings();
+        }
+        // Add new block button
+        if (target.id === 'add-block-btn') {
+            // Simple prompt-based add for now
+            const type = prompt("输入区块类型 (links, clipboard, files):");
+            const title = prompt("输入区块标题:");
+            const icon = prompt("输入区块图标 (emoji):");
+            if (type && title) {
+                appData.blocks.push({ id: `block-${Date.now()}`, type, title, icon, data: [] });
+                render();
+                navigateTo('settings-page'); // Re-render and stay on settings
+            }
+        }
+        // Delete block button
+        if(target.matches('.delete-block-btn')) {
+            const idToDelete = target.dataset.id;
+            if(confirm(`确定要删除这个区块吗？`)) {
+                appData.blocks = appData.blocks.filter(b => b.id !== idToDelete);
+                render();
+                navigateTo('settings-page');
+            }
+        }
+    });
+    
+    // --- Specific Event Handlers ---
+    authForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const passInput = document.getElementById('auth-password');
+        if (passInput.value) {
+            password = passInput.value;
+            authModal.classList.remove('active');
+            appContainer.style.display = 'flex';
+            initializeApp();
+        }
+    });
+    
+    document.getElementById('add-link-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const block = appData.blocks.find(b => b.id === activePageId);
+        if (block && block.type === 'links') {
+            block.data.push({
+                id: `l${Date.now()}`,
+                name: e.target.querySelector('#link-name').value,
+                url: smartUrl(e.target.querySelector('#link-url').value),
+                icon: e.target.querySelector('#link-icon').value,
+                description: e.target.querySelector('#link-description').value
+            });
+            api.saveData(appData).then(() => showToast('添加成功')).catch(err => showToast(err.message, 'error'));
+            render();
+            hideModal('add-link-modal');
+            e.target.reset();
+        }
+    });
+
+    document.getElementById('add-clipboard-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const block = appData.blocks.find(b => b.id === activePageId);
+        if (block && block.type === 'clipboard') {
+            if (!block.data) block.data = [];
+            block.data.push({
+                id: `c${Date.now()}`,
+                title: e.target.querySelector('#clip-title').value,
+                text: e.target.querySelector('#clip-text').value
+            });
+            api.saveData(appData).then(() => showToast('添加成功')).catch(err => showToast(err.message, 'error'));
+            render();
+            hideModal('add-clipboard-modal');
+            e.target.reset();
+        }
+    });
+
+    document.getElementById('cancel-add-link').onclick = () => hideModal('add-link-modal');
+    document.getElementById('cancel-add-clip').onclick = () => hideModal('add-clipboard-modal');
+    
+    function handleDeleteItem(e) {
+        const { id, blockId } = e.currentTarget.dataset;
+        const block = appData.blocks.find(b => b.id === blockId);
+        if (block && confirm('确定要删除这个项目吗?')) {
+            block.data = block.data.filter(item => item.id !== id);
+            api.saveData(appData).then(() => showToast('删除成功')).catch(err => showToast(err.message, 'error'));
+            render();
+            navigateTo(block.id);
+        }
+    }
+    
+    async function handleDeleteFile(e) {
+        const filename = e.currentTarget.dataset.name;
+        if (confirm(`确定要删除文件 "${filename}" 吗?`)) {
+            try {
+                await api.deleteFile(filename);
+                showToast('文件删除成功');
+                cache.delete('files'); // Invalidate cache
+                render();
+                navigateTo(activePageId);
+            } catch (error) {
+                showToast(`删除失败: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    async function handleFileUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        showToast(`正在上传 ${file.name}...`);
+        try {
+            await api.uploadFile(file);
+            showToast('上传成功！');
+            cache.delete('files'); // Invalidate cache
+            render();
+            navigateTo(activePageId);
+        } catch (error) {
+            showToast(`上传失败: ${error.message}`, 'error');
+        }
+    }
+    
+    async function handleSaveSettings() {
+        // Update meta and settings
+        appData.meta.title = document.getElementById('setting-meta-title').value;
+        appData.meta.favicon = document.getElementById('setting-meta-favicon').value;
+        appData.settings.theme = document.getElementById('setting-theme').value;
+        appData.settings.accentColor = document.getElementById('setting-accentColor').value;
+        appData.settings.backgroundImage = document.getElementById('setting-bg-image').value;
+
+        // Update blocks from editor
+        const newBlocksOrder = sortableInstance.toArray();
+        const newBlocks = newBlocksOrder.map(id => {
+            const blockElement = document.querySelector(`.settings-block-item[data-id="${id}"]`);
+            const originalBlock = appData.blocks.find(b => b.id === id);
+            return {
+                ...originalBlock,
+                title: blockElement.querySelector('.block-title-input').value,
+                icon: blockElement.querySelector('.block-icon-input').value,
+            };
+        });
+        appData.blocks = newBlocks;
+
+        try {
+            await api.saveData(appData);
+            showToast('设置已保存');
+            applySettings();
+            render();
+            navigateTo('settings-page');
+        } catch (error) {
+            showToast(`保存失败: ${error.message}`, 'error');
+        }
+    }
+
+    function requestAuth(action) {
+        actionQueue.push(action);
+        authModal.classList.add('active');
+    }
+
+    function showToast(message, type = 'success') {
+        toast.textContent = message;
+        toast.style.backgroundColor = type === 'error' ? 'var(--danger-color)' : '#28a745';
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+    </script>
+</body>
+</html>
